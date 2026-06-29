@@ -1,0 +1,12 @@
+export { InterfaceModeRuntime } from './runtime';
+export type { InterfaceModeConfig } from './runtime';
+export { takeSnapshot, formatSnapshotForAgent } from './snapshot';
+export { executeCommand, executeBatch } from './executor';
+export { VisualLayer, injectVisualStyles } from './visual';
+export { planFromUserMessage } from './planner';
+export { checkCommandPolicy, executeApiCommand } from './policy';
+export { loadSettings, saveSettings, defaultSettings, isConfigured, PROVIDERS } from './settings';
+export { streamChat, parseToolCalls, stripToolCallBlocks } from './transport';
+export type { LLMSettings, Provider, ProviderDef } from './settings';
+export type { ChatMessage, ParsedAction } from './transport';
+export * from './types';

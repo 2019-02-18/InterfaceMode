@@ -1,0 +1,27 @@
+siteId: nebula-merchant-demo
+name: 测试商户后台
+version: "0.1.0"
+
+overlaySelectors:
+  - "#im-assistant-dock"
+  - "[data-im-overlay]"
+
+blockedActions:
+  - id: block-delete-merchant
+    reason: 注销商户账号属于高危操作，需人工验证
+    when:
+      action: click
+      textContains: 注销商户
+
+apis:
+  - getTodayRevenue
+
+playbooks:
+  - id: create_order
+    triggers: [创建订单, 新建订单, 创建一笔订单]
+  - id: view_revenue
+    triggers: [今日营收, 查看营收, 查看今日营收]
+  - id: go_settings
+    triggers: [门店设置, 打开设置]
+
+# 完整步骤定义见 index.ts；生产可由 Cursor Skill 生成此文件 + skills.md
