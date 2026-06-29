@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --mode pages",
     "build:lib": "tsc -b && vite build --mode lib",
+    "deploy:blog": "node scripts/deploy-blog.mjs",
     "preview": "vite preview"
   },
   "devDependencies": {

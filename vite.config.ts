@@ -2,6 +2,17 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
+  // Pages deploy: npm run build:pages
+  // Outputs dist/ with base /interface-mode-demo/ for GitHub Pages subpath.
+  if (mode === 'pages') {
+    return {
+      base: '/interface-mode-demo/',
+      build: {
+        outDir: 'dist',
+      },
+    };
+  }
+
   // Library build: npm run build:lib
   // Outputs dist/lib/im.umd.js and dist/lib/im.es.js for embedding in any website.
   if (mode === 'lib') {
