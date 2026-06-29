@@ -2,7 +2,7 @@
 
 > 可嵌入网站的 **AI 界面操作助手框架**
 
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-purple.svg)](https://vitejs.dev/)
 
@@ -297,10 +297,11 @@ window.__im.snapshot() // 手动触发 DOM 快照，查看元素树
 
 ## 许可证
 
-本项目基于 **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)** 协议开源。
+本项目基于 **Apache License 2.0** 协议开源。
 
-- ✅ 允许：学习、研究、修改、非商业项目部署
-- ❌ 禁止：商业使用、销售、作为付费产品的核心组件
-- 📌 要求：保留原作者署名
+- ✅ 允许：自由使用、修改、分发，包括商业用途
+- ✅ 允许：私有部署、集成到商业产品
+- 📌 要求：保留原始版权声明和 LICENSE 文件
+- 📌 要求：修改的文件须注明变更
 
-详见 [LICENSE](LICENSE) 文件。如需商业授权，请联系作者。
+详见 [LICENSE](LICENSE) 文件。
