@@ -43,6 +43,16 @@ function isDisabled(el: Element): boolean {
   return el.getAttribute('aria-disabled') === 'true';
 }
 
+function isRequired(el: Element): boolean {
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    if (el.required) return true;
+  }
+  const v = el.getAttribute('aria-required');
+  if (v === 'true') return true;
+  if (el.hasAttribute('required')) return true;
+  return false;
+}
+
 function getRole(el: Element): string | undefined {
   const explicit = el.getAttribute('role');
   if (explicit) return explicit.toLowerCase();
@@ -124,7 +134,18 @@ function shouldSkip(el: Element, overlaySelectors: string[]): boolean {
 
 function collectAttributes(el: Element): Record<string, string> {
   const attrs: Record<string, string> = {};
-  for (const name of ['id', 'class', 'role', 'aria-label', 'name', 'type', 'href']) {
+  for (const name of [
+    'id',
+    'class',
+    'role',
+    'aria-label',
+    'aria-required',
+    'name',
+    'type',
+    'href',
+    'placeholder',
+    'required',
+  ]) {
     const v = el.getAttribute(name);
     if (v) attrs[name] = v.slice(0, 120);
   }
@@ -144,6 +165,7 @@ function buildTreeLine(el: Element, indent: number, lines: string[], overlaySele
   const parts: string[] = [];
   if (role) parts.push(role);
   if (!isDisabled(el) && isVisible(el) && ref) parts.push('[cursor=pointer]');
+  if (isRequired(el)) parts.push('[required]');
   if (ref) parts.push(`[ref=${ref}]`);
   const meta = parts.length ? ` ${parts.join(' ')}` : '';
   const suffix = label ? `: ${label}` : '';

@@ -14,6 +14,8 @@
 
 export { InterfaceModeRuntime } from './runtime';
 export { loadSettings, saveSettings, defaultSettings, isConfigured, PROVIDERS } from './settings';
+export type { InterfaceModeConfig, InterfaceModeOpenOptions } from './runtime';
+export type { AssistantMode } from './transport';
 export type {
   SitePack,
   Playbook,
@@ -25,5 +27,12 @@ export type {
   AgentMessage,
   PageSnapshot,
   SnapshotElement,
-  InterfaceModeConfig,
+  SitePackTheme,
+  SitePackCapability,
+  SitePackEntrypoint,
+  SitePackRoute,
+  SitePackPermission,
+  SitePackRiskPolicy,
+  RiskLevel,
 } from './types';
+export type { TaskState, TaskStep, TaskStatus, PersistedSession } from './task-state';

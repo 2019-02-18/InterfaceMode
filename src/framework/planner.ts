@@ -63,13 +63,11 @@ function stepToCommand(
   let ref = step.ref;
   if (step.find) {
     const found = findElementInSnapshot(snapshot, step.find);
-    if (!found) {
-      return { error: `未在页面中找到：${JSON.stringify(step.find)}` };
-    }
-    ref = found.ref;
+    if (found) ref = found.ref;
+    // Element may not exist yet (e.g. inside a modal) — keep find for execution-time lookup.
   }
 
-  if (ref == null) {
+  if (ref == null && !step.find) {
     return { error: `步骤缺少 ref 或 find：${step.explanation ?? step.tool}` };
   }
 
@@ -83,6 +81,43 @@ function stepToCommand(
       explanation: step.explanation,
     },
   };
+}
+
+export function formatPackContextForAgent(pack: SitePack): string {
+  const lines: string[] = ['## 站点包索引（规划时参考）'];
+
+  if (pack.entrypoints?.length) {
+    lines.push('', '### 产品入口');
+    for (const ep of pack.entrypoints) {
+      const triggers = ep.triggers?.length ? `（触发词：${ep.triggers.join('、')}）` : '';
+      const pb = ep.playbookId ? ` → playbook: \`${ep.playbookId}\`` : '';
+      lines.push(`- **${ep.label}**${pb}${triggers}`);
+    }
+  }
+
+  if (pack.playbooks?.length) {
+    lines.push('', '### 已配置流程（playbooks）');
+    for (const pb of pack.playbooks) {
+      lines.push(`- \`${pb.id}\`：${pb.description}（触发词：${pb.triggers.join('、')}）`);
+    }
+  }
+
+  if (pack.routes?.length) {
+    lines.push('', '### 页面路由');
+    for (const r of pack.routes) {
+      lines.push(`- \`${r.path}\`${r.title ? ` ${r.title}` : ''}${r.description ? ` — ${r.description}` : ''}`);
+    }
+  }
+
+  if (pack.capabilities?.length) {
+    lines.push('', '### 能力');
+    for (const c of pack.capabilities) {
+      const apis = c.apis?.length ? ` [API: ${c.apis.join(', ')}]` : '';
+      lines.push(`- ${c.label}${c.description ? `：${c.description}` : ''}${apis}`);
+    }
+  }
+
+  return lines.join('\n');
 }
 
 export function planFromUserMessage(

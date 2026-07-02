@@ -1,175 +1,316 @@
 ---
 name: im-sitepack-builder
 description: >-
-  InterfaceMode 站点包（SitePack）生成技能。通过对话引导开发者梳理网站的可自动化功能，
-  最终生成完整的 SitePack TypeScript 配置和运行时 runtime-guide.md。
-  触发条件：用户说「为某某网站生成站点包」、「接入 InterfaceMode」、「新站点配置」、
-  「给助手写配置」、「im sitepack」，或描述一个需要接入 InterfaceMode 助手的网站。
+  引导创建 InterfaceMode 站点包（SitePack）：生成 index.ts 与 runtime-guide.md，
+  配置 capabilities、entrypoints、routes、playbooks、API 与风险策略，并与框架执行机制对齐。
+  适用于用户要生成站点包、接入 InterfaceMode、为网站写助手配置，或提到
+  im sitepack / 站点包 / 接入 InterfaceMode / 新站点配置 / 给助手写配置。
 ---
 
-# InterfaceMode SitePack Builder
+# InterfaceMode 站点包构建
 
-你是一个专门帮开发者为任意网站创建 InterfaceMode 站点包的向导。
+## 交付物
 
-**你的目标**：通过有针对性的对话，采集足够信息后，一次性生成两个文件：
-1. `src/site-packs/<site-id>/index.ts` — SitePack TypeScript 配置
-2. `src/site-packs/<site-id>/runtime-guide.md` — 运行时 AI 系统提示词
+在 `src/site-packs/<site-id>/` 下生成 **两个文件**：
 
----
+| 文件 | 作用 |
+|------|------|
+| `index.ts` | 类型化的 `SitePack`：playbooks、API、策略、元数据 |
+| `runtime-guide.md` | 作为 `skillsMarkdown` 注入 LLM 操作模式系统提示 |
 
-## 阶段一：采集（必须完成，不得跳过）
-
-依次问以下问题（每次只问 1-2 个，等用户回答后继续）：
-
-### 第 1 组：基本信息
-- 这个网站是做什么的？（电商、后台、SaaS、门户……）
-- 站点 ID 建议（英文小写+连字符，如 `my-shop-admin`）
-- 版本号（默认 `0.1.0`）
-
-### 第 2 组：核心可自动化功能
-问：「用户最常做哪些重复操作？请列举 3-5 个场景，每个场景说明：
-- 操作名称（如「创建订单」）
-- 大概步骤（点哪里 → 填什么 → 点哪里提交）
-- 触发词（用户会怎么描述这个需求，如「下单」「新建」）」
-
-### 第 3 组：业务接口（API）
-问：「网站有没有可以直接调用的 JS 函数或 REST API，比如：
-- 获取统计数据（今日销量、库存……）
-- 查询某条记录
-- 提交业务操作
-如果有，说明函数名和返回格式。」
-
-### 第 4 组：安全与限制
-问：「哪些操作绝对不能自动执行，需要用户手动确认或禁止？（如：删除账号、清空数据、大额转账……）」
-
-### 第 5 组：UI 结构提示（可选但推荐）
-问：「页面结构是什么样的？（侧边栏导航？顶部 Tab？URL 路由？）
-有没有常见的弹窗、对话框、表单需要特别说明？」
+生成前先阅读参考实现：`src/site-packs/demo/`。
 
 ---
 
-## 阶段二：生成
+## 工作流清单
 
-采集完毕后，按以下模板生成代码。
+复制并跟踪进度：
 
-### `index.ts` 模板
+```
+站点包构建：
+- [ ] 1. 站点标识（name、siteId、version）
+- [ ] 2. 能力地图（各模块 + 增删改查）
+- [ ] 3. 路由与导航
+- [ ] 4. Playbooks（每个高频流程一条）
+- [ ] 5. Entrypoints（触发词 → playbookId）
+- [ ] 6. API 与 DOM 边界
+- [ ] 7. 风险策略（禁止 / 需确认）
+- [ ] 8. runtime-guide.md（与 playbook 一致）
+- [ ] 9. 接入 main.ts / embed
+- [ ] 10. 一致性检查（见「交付前校验」）
+```
+
+每轮只问 **1～2 组** 问题，不要一次性抛完所有问题。
+
+---
+
+## 框架如何使用站点包
+
+理解这一点，可避免「配置看起来对、运行却失败」。
+
+| 配置项 | 运行时行为 |
+|--------|------------|
+| **playbooks** | 用户消息匹配 `triggers` → 框架**直接执行** playbook 步骤（可靠路径）；LLM 负责解释、跟进与未匹配意图的规划 |
+| **entrypoints** | 产品入口索引：label + triggers + `playbookId`；通过 `formatPackContextForAgent` 注入 LLM 上下文 |
+| **capabilities** | 可读的能力模块列表，帮 LLM 界定可自动化范围 |
+| **routes** | 页面地图，辅助导航规划 |
+| **skillsMarkdown**（`runtime-guide.md`） | 始终注入操作模式系统提示；**不得与 playbook 矛盾** |
+| **apis** | 有 JS/REST 暴露时优先于 DOM；未注册则无 API 兜底 |
+| **blockedActions / riskPolicies** | 执行前硬拦截或要求确认 |
+| **overlaySelectors** | 快照时排除助手自身 UI |
+
+**LLM + 站点包分工（不要只设计其中一侧）：**
+
+- 匹配 playbook → 先跑标准步骤
+- 未匹配 → LLM 结合 runtime-guide + 快照 + 站点包索引规划
+- 弹窗 / 晚出现的元素 → playbook 保留 `find`；框架在**执行时**再解析（规划阶段可能还看不到）
+
+**框架已负责（站点包不要重复实现）：**
+
+- 必填识别（控件上的 `required` / `aria-required`）
+- 提交前校验、缺必填时向用户追问
+- 快照中的 `[required]` 标记
+
+站点包应在 `runtime-guide.md` 写明**哪些字段必填**，便于 LLM 主动填写；宿主页面用标准 HTML `required` / `aria-required` 即可。
+
+---
+
+## 信息采集问题
+
+### A 组 — 基本信息
+- 网站类型（SaaS 后台、电商、门户等）？
+- `siteId` 建议（小写连字符，如 `acme-crm`）
+- 显示名称与版本（默认 `0.1.0`）
+
+### B 组 — 模块与 CRUD
+对每个用户关心的模块：
+- 查 / 增 / 改 / 删 — 哪些有？
+- 按钮上的**可见文字**（中英文原文）
+- 是否只有弹窗里才有的操作？
+
+### C 组 — 单流程细节（每个 playbook 重复）
+对每个候选自动化流程：
+1. **触发词**（用户会怎么说，3～8 种说法）
+2. **步骤**（用可见 UI 文字描述：菜单 → 按钮 → 字段 → 提交）
+3. **控件类型**：
+   - 原生 `<select>` → playbook 用 `select` + `role: combobox`
+   - 文本/数字 → `input` + `role: textbox`
+   - 组件库自定义下拉（Element/Ant Design）→ 在 guide 中说明，可能需要 click 打开选项
+4. **必填项**及 playbook 中的示例默认值
+5. 是否跨页？（先导航 → 开弹窗 → 提交）
+
+### D 组 — API
+- 可调用的 JS 函数或 REST？
+- 名称、参数、返回结构
+- 哪些数据**禁止**读 DOM？
+
+### E 组 — 安全
+- 必须禁止自动执行的操作（删账号、大额转账等）
+- 需用户二次确认才可执行的操作
+
+### F 组 — 导航
+- 侧栏 / Tab / hash 路由 / path 路由
+- 页面上显示的标题文字
+
+用户描述模糊时，追问**按钮和标签在屏幕上的原文**，不要猜 CSS 选择器或 `data-testid`。
+
+---
+
+## Playbook 编写规范
+
+### 结构示例
+
+```typescript
+{
+  id: 'create_customer',           // snake_case，稳定不变
+  description: '新增一名客户',        // 确认 UI 中展示
+  triggers: ['新增客户', '创建客户', '添加客户'],
+  steps: [
+    { tool: 'snapshot', explanation: '采集当前页面' },
+    { tool: 'click', find: { textContains: '客户管理' }, explanation: '进入客户管理' },
+    { tool: 'snapshot', explanation: '采集列表页' },
+    { tool: 'click', find: { textContains: '新增客户' }, explanation: '打开弹窗' },
+    { tool: 'snapshot', explanation: '采集表单' },
+    { tool: 'input', find: { role: 'textbox', textContains: '客户名称' }, inputValue: '示例公司', explanation: '填写客户名称' },
+    { tool: 'select', find: { role: 'combobox', textContains: '客户等级' }, selectValue: '标准', explanation: '选择等级' },
+    { tool: 'input', find: { role: 'textbox', textContains: '联系人' }, inputValue: '张三 13800001234', explanation: '填写联系人' },
+    { tool: 'click', find: { textContains: '保存' }, explanation: '保存' },
+  ],
+}
+```
+
+### 规则
+
+1. 流程以 `snapshot` 开头；导航或打开弹窗后再 `snapshot`
+2. `find.textContains` 必须匹配**页面上真实出现的文字**
+3. 优先 `find`，少用 `ref`（ref 会随快照刷新变化）
+4. 下拉框：**`select`**，禁止用 `input` 编造选项文字
+5. 新增/编辑 playbook 须覆盖**全部必填项**，并给出合理 `inputValue` / `selectValue`
+6. 纯 API 流程：一步 `api`，不要用 DOM 读同一份数据
+7. 删除流程：行内删除 → 确认弹窗 → 点「确认删除」（或站点实际确认按钮文案）
+8. 一个用户意图一条 playbook；CRUD 拆成 `create_*` / `edit_*` / `delete_*`
+
+### 工具选用
+
+| tool | 场景 |
+|------|------|
+| `snapshot` | 导航前/后、弹窗打开后 |
+| `click` | 按钮、链接、菜单 |
+| `input` | textbox / textarea / 数字框 |
+| `select` | 原生 `<select>` / combobox |
+| `api` | 站点包 `apis` 中已注册的接口 |
+| `goto` | 整页 URL 跳转（少用，优先点菜单导航） |
+
+---
+
+## runtime-guide.md 规范
+
+必须与 `index.ts` 中的 playbook **一致**。建议章节：
+
+1. **可自动化功能** — 按模块表格：路径 + 控件类型 + 必填项
+2. **业务接口** — API 名、何时用、禁止用 DOM 替代
+3. **禁止操作** — 与 `blockedActions` / `riskPolicies` 一致
+4. **页面导航** — 菜单文案、路由说明、弹窗时机
+5. **操作规范** — 先 snapshot；combobox 用 select；textbox 用 input；匹配 playbook 时走标准步骤
+
+**常见不一致（务必避免）：**
+
+| guide 里错的写法 | 正确写法 |
+|------------------|----------|
+| 下拉框写「填写客户名称」 | 「用 select 选择客户」 |
+| 漏写必填项 | 每个表单列出全部必填字段 |
+| playbook 用 select，guide 写 input | 两侧控件类型一致 |
+
+---
+
+## index.ts 模板
 
 ```typescript
 import type { SitePack } from '../../framework/types';
-// 如有业务接口，在此导入：
-// import { someApiFunction } from './api';
+import runtimeGuide from './runtime-guide.md?raw';
+// 按需导入宿主 API：
+// import { fetchStats } from '../../host-app/api';
 
-export const sitePack: SitePack = {
+export const mySitePack: SitePack = {
   siteId: '<site-id>',
-  name: '<网站中文名>',
-  version: '<version>',
-  skillsMarkdown: '', // 运行时由 main.ts 注入 runtime-guide.md?raw
+  name: '<显示名>',
+  version: '0.1.0',
+  skillsMarkdown: runtimeGuide,
+
+  theme: { accent: '#2563eb' }, // 可选
+
+  capabilities: [
+    { id: 'orders', label: '订单管理', description: '订单增删改查' },
+  ],
+
+  entrypoints: [
+    { id: 'create-order', label: '创建订单', triggers: ['创建订单', '新建订单'], playbookId: 'create_order' },
+  ],
+
+  routes: [
+    { path: '/orders', title: '订单管理', description: '列表与新建' },
+  ],
+
+  permissions: [
+    { id: 'write-orders', scope: 'orders:write', description: '创建订单' },
+  ],
+
+  riskPolicies: [
+    {
+      id: 'block-delete-account',
+      level: 'high',
+      blocked: true,
+      reason: '删除账号需人工操作',
+      when: { action: 'click', textContains: '注销' },
+    },
+  ],
+
   overlaySelectors: ['[data-im-overlay]'],
 
   blockedActions: [
-    // 每条高危操作一个规则
     {
-      id: 'block-<action-id>',
-      reason: '<原因，告知用户需手动操作>',
-      when: {
-        action: 'click',
-        textContains: '<按钮文字关键词>',
-      },
+      id: 'block-delete-account',
+      reason: '删除账号需人工操作',
+      when: { action: 'click', textContains: '注销' },
     },
   ],
 
-  requireConfirm: [
-    // 需要二次确认但可以自动执行的操作
-    // { action: 'click', textContains: '提交' },
-  ],
+  requireConfirm: [],
 
   apis: {
-    // 每个注册的业务 API
-    // <apiName>: async (args) => {
-    //   const data = await someApiFunction(args);
-    //   return { success: true, message: `结果：${JSON.stringify(data)}`, data };
-    // },
+    // getStats: async () => ({ success: true, message: '...', data: {} }),
   },
 
   playbooks: [
-    // 每个可自动化功能一个 playbook
-    {
-      id: '<playbook-id>',
-      description: '<功能描述>',
-      triggers: ['<触发词1>', '<触发词2>'],
-      steps: [
-        {
-          tool: 'snapshot',
-          explanation: '采集当前页面',
-        },
-        {
-          tool: 'click',
-          find: { textContains: '<导航菜单文字>' },
-          explanation: '进入<目标页面>',
-        },
-        // 更多步骤……
-      ],
-    },
+    // 见「Playbook 编写规范」
   ],
 };
 ```
 
-### `runtime-guide.md` 模板
+---
 
-```markdown
-# <网站名> — InterfaceMode 运行时指南
+## 接入方式
 
-## 可自动化功能
+```typescript
+// src/main.ts（或宿主入口）
+import { InterfaceModeRuntime } from './framework/runtime';
+import { mySitePack } from './site-packs/<site-id>';
+import runtimeGuide from './site-packs/<site-id>/runtime-guide.md?raw';
 
-### 1. <功能名>
-- 步骤：<step1> → <step2> → <step3>
-- 触发词：<词1>、<词2>
-
-## 业务接口（优先于 DOM 操作）
-
-| API 名 | 用途 | 返回示例 |
-|--------|------|---------|
-| `<apiName>` | <说明> | `{ ... }` |
-
-## 禁止操作
-
-- **<操作名>**：<原因>
-
-## 页面结构
-
-<导航方式、路由说明>
-
-## 操作规范
-
-1. 每次操作前先 snapshot
-2. 用 find.textContains 定位，不猜 ref 数字
-3. 有可用 API 时优先调用 API，不读 DOM
+new InterfaceModeRuntime({
+  sitePack: mySitePack,
+  skillsMarkdown: runtimeGuide,
+});
 ```
+
+调试：在关键页面/弹窗执行 `window.__im.snapshot()`，核对标签、`[required]`、combobox 与 textbox 是否识别正确。
 
 ---
 
-## 阶段三：引导接入
+## 交付前校验
 
-生成代码后，额外输出一段接入说明：
+生成后逐项核对（可请用户在真实页面上确认）：
 
-```
-## 接入步骤
+- [ ] 每个 `entrypoints[].playbookId` 在 `playbooks` 中存在
+- [ ] 每条 playbook 的 `triggers` 至少 2 个自然说法
+- [ ] 新增/编辑 playbook 填写了**全部**必填项
+- [ ] 没有对 combobox 使用 `input`
+- [ ] `runtime-guide.md` 控件类型与 playbook 工具一致
+- [ ] API 流程没有多余的 DOM 读取步骤
+- [ ] `blockedActions` 文案与真实按钮一致
+- [ ] `overlaySelectors` 排除了助手 UI
+- [ ] `find.textContains` 在真实 UI 或快照中能找到（用户确认或 snapshot 验证）
 
-1. 将 index.ts 放到 src/site-packs/<site-id>/index.ts
-2. 将 runtime-guide.md 放到同目录
-3. 在 main.ts 中：
-   import { sitePack } from './site-packs/<site-id>';
-   import runtimeGuide from './site-packs/<site-id>/runtime-guide.md?raw';
-   new InterfaceModeRuntime({ sitePack, skillsMarkdown: runtimeGuide });
-4. 将 <script src="dist/im.js"></script> 注入目标网站 HTML
-5. 在浏览器控制台运行 window.__im.snapshot() 验证元素采集是否正确
-```
+校验不通过时，**同时**修改 `index.ts` 与 `runtime-guide.md`。
 
 ---
 
-## 注意事项
+## 反模式
 
-- 如果用户描述不清楚某个步骤，追问元素的可见文字（不要猜 CSS 类名或 ID）
-- 如果业务接口信息不足，留空 `apis: {}` 并在 runtime-guide 中注明
-- 生成后提醒用户：`find.textContains` 的值必须是页面上实际出现的文字片段
-- 如果是 React/Vue/Angular 应用，提醒：输入框可能需要 nativeInputValueSetter 才能触发框架的 onChange
+| 反模式 | 后果 |
+|--------|------|
+| playbook 与 guide 控件类型不一致 | LLM 乱规划或覆盖可靠 playbook |
+| 核心流程只靠 LLM、不写 playbook | 下拉选择失败、假成功 |
+| 在站点包里硬编码必填校验逻辑 | 框架已通用处理 `required`，重复且绑死站点 |
+| playbook 里写 CSS 选择器 | 易碎；除非宿主团队坚持，否则用可见文字 |
+| 一条巨型 playbook 包打天下 | 触发词难匹配；应按意图拆分 |
+| 导航后不做 `snapshot` | 元素树过期，find 失败 |
+
+---
+
+## 生成后告知用户
+
+1. 文件路径与内容概要
+2. 如何在 `main.ts` / embed 中接入
+3. 每个 entrypoint 建议的测试口令
+4. 提醒：宿主表单应使用 `required` / `aria-required`，框架才能做必填校验与追问
+5. 建议在关键页面运行 `window.__im.snapshot()` 验证 find 条件
+
+---
+
+## 延伸阅读
+
+- 类型定义：`src/framework/types.ts`（`SitePack`、`Playbook`、`PlaybookStep`）
+- 演示站点包：`src/site-packs/demo/index.ts`、`runtime-guide.md`
+- 规划器：`src/framework/planner.ts`（触发匹配、延迟 find）
+- 操作模式系统提示：`src/framework/transport.ts`（`INTERFACE_MODE_SYSTEM`）

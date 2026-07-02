@@ -1,5 +1,6 @@
 import { REF_ATTR, type FindSpec, type PageSnapshot, type ToolCommand, type ToolResult } from './types';
 import { findElementInSnapshot, takeSnapshot } from './snapshot';
+import { buildRequiredFieldsError } from './validation';
 
 let lastHovered: Element | null = null;
 
@@ -46,6 +47,59 @@ function dispatchClick(el: Element): void {
   el.dispatchEvent(new MouseEvent('mousedown', base));
   el.dispatchEvent(new MouseEvent('mouseup', base));
   el.dispatchEvent(new MouseEvent('click', base));
+}
+
+function isRequiredControl(el: Element): boolean {
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    if (el.required) return true;
+  }
+  const v = el.getAttribute('aria-required');
+  if (v === 'true') return true;
+  if (el.hasAttribute('required')) return true;
+  return false;
+}
+
+function isEmptyControl(el: Element): boolean {
+  if (el instanceof HTMLSelectElement) return el.value.trim() === '';
+  if (el instanceof HTMLInputElement) return el.value.trim() === '';
+  if (el instanceof HTMLTextAreaElement) return el.value.trim() === '';
+  return false;
+}
+
+function guessFieldLabel(control: Element): string {
+  const parentLabel = control.closest('label');
+  if (parentLabel) {
+    const clone = parentLabel.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('input,select,textarea').forEach((c) => c.remove());
+    const t = clone.textContent?.trim();
+    if (t) return t.slice(0, 24);
+  }
+  const aria = control.getAttribute('aria-label');
+  if (aria) return aria.trim().slice(0, 24);
+  const name = control.getAttribute('name');
+  if (name) return name.trim().slice(0, 24);
+  return '未命名字段';
+}
+
+function validateRequiredBeforeSubmit(buttonEl: Element): string[] {
+  // Generic heuristic: if this click is likely a submit/save, validate required fields in the closest dialog/form.
+  const btnText = (buttonEl.textContent ?? '').trim();
+  const looksLikeSubmit =
+    (buttonEl instanceof HTMLButtonElement && (buttonEl.type === 'submit' || buttonEl.getAttribute('type') === 'submit')) ||
+    /(保存|提交|确认|发送|创建|更新|完成)/.test(btnText);
+  if (!looksLikeSubmit) return [];
+
+  const scope =
+    buttonEl.closest('form') ??
+    buttonEl.closest('[role="dialog"]') ??
+    buttonEl.closest('.dialog') ??
+    buttonEl.closest('.overlay');
+  if (!scope) return [];
+
+  const requiredControls = Array.from(scope.querySelectorAll('input,select,textarea')).filter(isRequiredControl);
+  const missing = requiredControls.filter(isEmptyControl).map(guessFieldLabel);
+  // De-duplicate labels while preserving order
+  return missing.filter((x, i) => missing.indexOf(x) === i);
 }
 
 /** Resolve element from find spec or ref, taking a fresh snapshot if find is used. */
@@ -126,6 +180,12 @@ export async function executeCommand(
   try {
     // ── click ──────────────────────────────────────────────────────────────────
     if (cmd.action === 'click') {
+      const missing = validateRequiredBeforeSubmit(el);
+      if (missing.length) {
+        const r: ToolResult = { success: false, message: buildRequiredFieldsError(missing) };
+        options.onAfterAction?.(cmd, r);
+        return r;
+      }
       hoverEnter(lastHovered, el);
       await sleep(120);
       dispatchClick(el);
@@ -177,11 +237,48 @@ export async function executeCommand(
         return r;
       }
       focusEl(el);
-      el.value = cmd.selectValue ?? '';
+      const want = (cmd.selectValue ?? '').trim();
+
+      // If no selectValue is provided, pick the first non-empty option.
+      if (!want) {
+        const candidate = Array.from(el.options).find((o) => !o.disabled && o.value.trim() !== '');
+        if (!candidate) {
+          const r: ToolResult = { success: false, message: '下拉框没有可选项' };
+          options.onAfterAction?.(cmd, r);
+          return r;
+        }
+        el.value = candidate.value;
+      } else if (Array.from(el.options).some((o) => o.value === want)) {
+        // Prefer matching by option.value
+        el.value = want;
+      } else {
+        // Fallback: match by visible option text (contains)
+        const byText = Array.from(el.options).find((o) => o.text.trim().includes(want));
+        if (!byText) {
+          const r: ToolResult = {
+            success: false,
+            message: `下拉框没有匹配项：${want}`,
+          };
+          options.onAfterAction?.(cmd, r);
+          return r;
+        }
+        el.value = byText.value;
+      }
+
+      // Fire both input + change to satisfy different frameworks
+      el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       await sleep(150);
+
+      if (!el.value.trim()) {
+        const r: ToolResult = { success: false, message: '下拉框选择失败，值仍为空' };
+        options.onAfterAction?.(cmd, r);
+        return r;
+      }
+
       const snap = takeSnapshot({ overlaySelectors: overlays });
-      const r: ToolResult = { success: true, message: `已选择：${cmd.selectValue}`, snapshot: snap };
+      const selected = el.options[el.selectedIndex]?.text?.trim() ?? el.value;
+      const r: ToolResult = { success: true, message: `已选择：${selected}`, snapshot: snap };
       options.onAfterAction?.(cmd, r);
       return r;
     }

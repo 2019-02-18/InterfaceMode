@@ -101,13 +101,64 @@ export interface BlockedActionRule {
   };
 }
 
+export interface SitePackTheme {
+  accent?: string;
+  accent2?: string;
+  danger?: string;
+  warning?: string;
+  success?: string;
+}
+
+export interface SitePackCapability {
+  id: string;
+  label: string;
+  description?: string;
+  apis?: string[];
+}
+
+export interface SitePackEntrypoint {
+  id: string;
+  label: string;
+  description?: string;
+  triggers?: string[];
+  playbookId?: string;
+  route?: string;
+}
+
+export interface SitePackRoute {
+  path: string;
+  title?: string;
+  description?: string;
+}
+
+export interface SitePackPermission {
+  id: string;
+  scope: string;
+  description?: string;
+}
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+
+export interface SitePackRiskPolicy {
+  id: string;
+  level: RiskLevel;
+  reason?: string;
+  when: {
+    action?: ToolAction;
+    textContains?: string;
+    apiName?: string;
+  };
+  blocked?: boolean;
+  requireConfirm?: boolean;
+}
+
 export interface SitePack {
   siteId: string;
   name: string;
   version: string;
   /** 注入到 Agent 的操作文档（Markdown） */
   skillsMarkdown: string;
-  /** 演示用：关键词触发的预置流程；生产环境由 LLM + skills 动态生成 tool call */
+  /** 标准操作流程；匹配用户意图时优先于 LLM 自由规划 */
   playbooks?: Playbook[];
   blockedActions: BlockedActionRule[];
   /** 注册的可调用 API（无 API 配置则不可用，不做 DOM 兜底） */
@@ -119,6 +170,18 @@ export interface SitePack {
   overlaySelectors?: string[];
   /** 执行前需用户确认的操作 */
   requireConfirm?: Array<{ action: ToolAction; textContains?: string }>;
+  /** 产品级主题色，覆盖助手默认 CSS 变量 */
+  theme?: SitePackTheme;
+  /** 声明站点可提供的能力（文档/权限边界） */
+  capabilities?: SitePackCapability[];
+  /** 产品入口：可从宿主页或助手内触发 */
+  entrypoints?: SitePackEntrypoint[];
+  /** 路由/页面说明，供 Agent 理解站点结构 */
+  routes?: SitePackRoute[];
+  /** 权限范围声明 */
+  permissions?: SitePackPermission[];
+  /** 分级风险策略（补充 blockedActions / requireConfirm） */
+  riskPolicies?: SitePackRiskPolicy[];
 }
 
 export interface AgentMessage {

@@ -2,3 +2,9 @@ node_modules
 dist
 *.local
 *.tsbuildinfo
+
+# 开发沟通 / 内部文档（不入库）
+docs/
+*.draft.md
+**/iteration-plan.md
+**/share-article.md
